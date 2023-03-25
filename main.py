@@ -1,5 +1,8 @@
+import base64
 import typing
 
+import cv2
+import numpy as np
 from fastapi import FastAPI
 from fastapi.responses import Response
 from fastapi.requests import Request
@@ -17,8 +20,12 @@ def stream_video(
     body = b''
     async for chunk in request.stream():
         if contrast:
-            edit_contrast(chunk, contrast)
+            frame = np.asarray(bytearray(chunk), np.uint8)
+            frame = cv2.imdecode(frame, -1)
+            frame = edit_contrast(frame, contrast)
+            frame = cv2.imencode('.jpg', frame)[1]
+            chunk = base64.b64encode(frame).decode('utf-8')
         body += chunk
 
-    response = Response(body, media_type="video/mp4")
+    response = Response(body, media_type="text/plain")
     return response
