@@ -17,13 +17,13 @@ app = FastAPI(debug=True)
 async def stream_video(
         request: Request,
         title: str,
-        chunk_range: str = Header(None),
+        range: str = Header(None),
         contrast: typing.Optional[int | float] = None,
 ):
     body = b''
     path = Path(f"media/{title}")
     with open(path, "rb") as video:
-        start, end = chunk_range.replace("bytes=", "").split("-")
+        start, end = range.replace("bytes=", "").split("-")
         start = int(start)
         end = int(end) if end else start + 2048
         video.seek(1)
@@ -34,6 +34,7 @@ async def stream_video(
             'Accept-Ranges': 'bytes',
         }
 
+        """
         for chunk in data:
             if contrast:
                 frame = np.asarray(bytearray(chunk), np.uint8)
@@ -42,7 +43,8 @@ async def stream_video(
                 frame = cv2.imencode('.jpg', frame)[1]
                 chunk = base64.b64encode(frame).decode('utf-8')
             body += chunk
+        """
 
     # response = Response(body, media_type="text/plain", headers=headers)
-    response = Response(data, media_type="video/mp4", headers=headers)
-    return response
+        response = Response(data, media_type="text/plain", headers=headers)
+        return response
