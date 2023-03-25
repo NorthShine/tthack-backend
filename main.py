@@ -15,7 +15,7 @@ app = FastAPI(debug=True)
 @app.post("/video/")
 def stream_video(
         request: Request,
-        contrast: typing.Optional[int] = None,
+        contrast: typing.Optional[int | float] = None,
 ):
     body = b''
     async for chunk in request.stream():
