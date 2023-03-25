@@ -13,7 +13,7 @@ from contrast import edit_contrast
 app = FastAPI(debug=True)
 
 
-@app.post("/stream-video/{title}")
+@app.get("/stream/{title}")
 async def stream_video(
         request: Request,
         title: str,
@@ -22,10 +22,10 @@ async def stream_video(
 ):
     body = b''
     path = Path(f"media/{title}")
-    start, end = chunk_range.replace("bytes=", "").split("-")
-    start = int(start)
-    end = int(end) if end else start + 2048
     with open(path, "rb") as video:
+        start, end = chunk_range.replace("bytes=", "").split("-")
+        start = int(start)
+        end = int(end) if end else start + 2048
         video.seek(1)
         data = video.read(end - start)
         filesize = str(path.stat().st_size)
@@ -44,5 +44,5 @@ async def stream_video(
             body += chunk
 
     # response = Response(body, media_type="text/plain", headers=headers)
-    response = Response(body, media_type="video/mp4", headers=headers)
+    response = Response(data, media_type="video/mp4", headers=headers)
     return response
