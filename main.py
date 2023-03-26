@@ -1,60 +1,52 @@
 import time
 import typing
+import uuid
 
 import cv2
 import uvicorn
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
+from vidgear.gears import CamGear, StreamGear, VideoGear, WriteGear
 
 app = FastAPI()
 
 
-class VideoCamera(object):
-    def __init__(self, title, alpha):
-        self.video = cv2.VideoCapture(f"media/{title}")
-        self.video.set(3, 1280)  # float `width`
-        self.video.set(4, 720)  # float `height`
-        self.alpha = alpha
-
-    def __del__(self):
-        self.video.release()
-
-    def get_frame(self):
-        success, image = self.video.read()
-        try:
-            print(image.shape)
-        except:
-            return
-        image = cv2.convertScaleAbs(image, alpha=self.alpha)
-        ret, jpeg = cv2.imencode('.jpg', image)
-        return jpeg.tobytes()
-
-
-def gen(camera):
-    c = 1
-    start = time.time()
-    while True:
-        start_1 = time.time()
-        if c % 20 == 0:
-            end = time.time()
-            FPS = 20 / (end-start)
-            print("FPS_avg : {:.6f} ".format(FPS))
-            start = time.time()
-        frame = camera.get_frame()
-        if not frame:
-            break
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n\r\n')
-        end_1 = time.time()
-        FPS = 1/(end_1-start_1)
-        print("FPS : {:.6f} ".format(FPS))
-        c += 1
-
-
 @app.get('/stream/{title}')
 def video_feed(title: str, alpha: float = 1):
-    return StreamingResponse(gen(VideoCamera(title, alpha)), media_type="multipart/x-mixed-replace;boundary=frame")
+    frame_rate = 60
+    video_size = (1920, 1080)
 
+    stream = VideoGear(source="media/1.mp4").start()
+    writer = WriteGear(f"{uuid.uuid4()}.mp4", compression_mode=False)
+
+    def video_generator():
+        while True:
+            frame = stream.read()
+            if frame is None:
+                break
+            for _ in range(frame_rate * 2):
+                writer.write(frame)
+            writer.write(frame)
+            yield
+
+    # def frame_generator():
+    #     while True:
+    #         frame = stream.read()
+    #         if frame is None:
+    #             break
+    #         ret, jpeg = cv2.imencode('.jpg', frame)
+    #         jpeg = jpeg.tobytes()
+    #         # yield the frame as an HTTP response so it can be sent over the web
+    #         yield (b'--frame\r\n'
+    #                b'Content-Type: video/mp4\r\n\r\n' + jpeg + b'\r\n')
+
+    # define the headers for the HTTP response
+    headers = {
+        'Content-Type': 'multipart/x-mixed-replace; boundary=frame'
+    }
+
+    # return a StreamingResponse object with the frame generator function and headers
+    return StreamingResponse(frame_generator(), headers=headers)
 
 if __name__ == '__main__':
     uvicorn.run("main:app", host="127.0.0.1", port=5000, access_log=False)
