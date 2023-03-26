@@ -6,12 +6,12 @@ import os
 import cv2
 import uvicorn
 from fastapi import FastAPI, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
 from vidgear.gears import CamGear, StreamGear, VideoGear, WriteGear
 
 app = FastAPI()
 stream = VideoGear(source="media/1.mp4").start()
-output_params = {"-fourcc": "MJPG", "-fps": 30}
+output_params = {"-fourcc": "mp4v", "-fps": 30, "-vcodec": "h264_vaapi"}
 queue = []
 
 
@@ -61,49 +61,7 @@ def parse_range_request_header(str_header: str) -> dict:
 @app.get('/video_part/{video_filename}/')
 async def get_video_filename(request: Request, video_filename: str):
     video_filename = f"media/{video_filename}"
-    try:
-        next_filename = next(generator)
-    except StopIteration:
-        return {"detail": "stream_finished"}
-
-    file_stat = os.stat(video_filename)
-    content_length: int = file_stat.st_size
-
-    range_unit: str = "bytes"
-    start_range: int = 0
-    buffer_range: int = content_length
-
-    def iterfile():
-        nonlocal start_range, buffer_range
-        with open(f"{video_filename}", "rb", 2048) as file_ref:
-            file_ref.seek(start_range)
-            yield file_ref.read(buffer_range)
-
-    if "range" in request.headers:
-        range_request = parse_range_request_header(request.headers["range"])
-
-        start_range = int(range_request["start_range"])
-        if start_range > content_length:
-            start_range = content_length
-
-        if range_request["end_range"] is not None:
-            buffer_range = int(range_request["end_range"]) - start_range
-
-        left_bytes: int = content_length - start_range
-        if buffer_range > left_bytes:
-            buffer_range = left_bytes
-
-    headers = {
-        "Next-Part": str(next_filename)
-    }
-    headers["Content-Range"] = f"{range_unit} {start_range}-{buffer_range + start_range}/{content_length}"
-    headers["Content-Length"] = str(buffer_range)
-
-    response_status: int = 206
-    if buffer_range == 0:
-        response_status = 204
-
-    return StreamingResponse(iterfile(), response_status, media_type="video/mp4", headers=headers)
+    return FileResponse(video_filename, media_type="video/mp4")
 
 
 @app.get('/start_streaming/')
