@@ -10,6 +10,7 @@ from vidgear.gears import CamGear, StreamGear, VideoGear, WriteGear
 
 app = FastAPI()
 stream = VideoGear(source="media/1.mp4").start()
+output_params = {"-fourcc": "MJPG", "-fps": 30}
 queue = []
 
 
@@ -21,11 +22,12 @@ def video_generator():
             break
 
         random_filename = uuid.uuid4()
-        writer = WriteGear(f"media/{random_filename}.mp4", compression_mode=False)
+        writer = WriteGear(f"media/{random_filename}.mp4", compression_mode=False, **output_params)
         print(random_filename)
         queue.append(random_filename)        
         for _ in range(frame_rate * 2):
             writer.write(frame)
+            frame = stream.read()
         writer.close()
         yield random_filename
 
