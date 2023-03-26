@@ -8,12 +8,22 @@ import cv2
 import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.middleware.cors import CORSMiddleware
 from vidgear.gears import CamGear, StreamGear, VideoGear, WriteGear
 
 app = FastAPI()
 stream = VideoGear(source="media/1.mp4").start()
 output_params = {"-fourcc": "mp4v", "-fps": 30}
 queue = []
+
+app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=['*'],
+    allow_credentials=True,
+    allow_methods=['*'],
+    allow_headers=['*'],
+)
 
 
 def video_generator():
@@ -55,6 +65,7 @@ async def get_video_filename(request: Request, video_filename: str):
 async def video_feed():
     current_filename = next(generator)
     return {'start_filename': current_filename}
+
 
 if __name__ == '__main__':
     uvicorn.run("main:app", host="127.0.0.1", port=5000, access_log=False)
