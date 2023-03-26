@@ -1,4 +1,6 @@
 import time
+import typing
+
 import cv2
 import uvicorn
 from fastapi import FastAPI
@@ -8,10 +10,11 @@ app = FastAPI()
 
 
 class VideoCamera(object):
-    def __init__(self, title):
+    def __init__(self, title, alpha):
         self.video = cv2.VideoCapture(f"media/{title}")
         self.video.set(3, 1280)  # float `width`
         self.video.set(4, 720)  # float `height`
+        self.alpha = alpha
 
     def __del__(self):
         self.video.release()
@@ -22,7 +25,7 @@ class VideoCamera(object):
             print(image.shape)
         except:
             return
-        image = cv2.convertScaleAbs(image, alpha=2.5)
+        image = cv2.convertScaleAbs(image, alpha=self.alpha)
         ret, jpeg = cv2.imencode('.jpg', image)
         return jpeg.tobytes()
 
@@ -49,8 +52,8 @@ def gen(camera):
 
 
 @app.get('/stream/{title}')
-def video_feed(title: str):
-    return StreamingResponse(gen(VideoCamera(title)), media_type="multipart/x-mixed-replace;boundary=frame")
+def video_feed(title: str, alpha: float = 1):
+    return StreamingResponse(gen(VideoCamera(title, alpha)), media_type="multipart/x-mixed-replace;boundary=frame")
 
 
 if __name__ == '__main__':
