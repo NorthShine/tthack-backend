@@ -5,7 +5,7 @@ import uuid
 import cv2
 import uvicorn
 from fastapi import FastAPI, Request, Response
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from vidgear.gears import VideoGear
 
@@ -75,14 +75,31 @@ def video_generator(title, alpha):
 @app.get('/video_part/{video_filename}/')
 async def get_video_filename(request: Request, video_filename: str):
     session_id = request.cookies.get("session_id")
-    current_frame_generator = queue[session_id]["generator"]
-    current_filename = next(current_frame_generator)
+    generator = queue.get(session_id)
+    current_frame_generator = generator["generator"] if generator is not None else None
+    if current_frame_generator is None:
+        return JSONResponse(
+            content={"message": "End of video"},
+            headers={"x-next-frame": "end"}
+        )
+
+    try:
+        current_filename = next(current_frame_generator)
+    except StopIteration:
+        del queue[session_id]
+        headers = {
+            "x-next-frame": "end"
+        }
+        return JSONResponse(
+            content={"message": "End of video"},
+            headers=headers)
 
     headers = {
-        "Next-Frame": current_filename,
+        "X-Next-Frame": current_filename,
+        "media-type": "video/mp4"
     }
     video_filename = f"media/{video_filename}"
-    response = FileResponse(video_filename, media_type="video/mp4", headers=headers)
+    response = FileResponse(video_filename, headers=headers)
 
     return response
 
