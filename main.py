@@ -4,14 +4,14 @@ import uuid
 
 import cv2
 import uvicorn
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from vidgear.gears import VideoGear
 
 app = FastAPI()
 output_params = {"-fourcc": "mp4v", "-fps": 30}
-queue = []
+queue = {}
 
 app = FastAPI()
 app.add_middleware(
@@ -41,7 +41,6 @@ def video_generator(title, alpha):
             30,
             (frame_width, frame_height)
         )
-        queue.append(random_filename)        
         for _ in range(frame_rate * 2):
             writer.write(frame)
             frame = stream.read()
@@ -63,10 +62,20 @@ async def get_video_filename(request: Request, video_filename: str):
     return FileResponse(video_filename, media_type="video/mp4")
 
 
-@app.get('/start_streaming/{title}')
-async def video_feed(title: str, alpha: typing.Optional[float] = None):
-    current_filename = next(video_generator(title, alpha))
-    return {'start_filename': current_filename}
+@app.get('/start_streaming/{title}/')
+async def video_feed(title: str, response: Response, alpha: typing.Optional[float] = None):
+    session_id = str(uuid.uuid4())
+    start_frame_id = session_id + "_start_frame"
+    framechunks_generator = video_generator(title, alpha)
+    start_framechunk_filename = next(framechunks_generator)
+
+    queue[start_frame_id] = {
+        "generator": framechunks_generator,
+        "next_frame_id": None,
+    }
+
+    response.set_cookie(key="session_id", value=start_frame_id)
+    return {'start_filename': start_framechunk_filename}
 
 
 if __name__ == '__main__':
