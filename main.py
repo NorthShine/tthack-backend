@@ -74,23 +74,30 @@ def video_generator(title, alpha):
 
 @app.get('/video_part/{video_filename}/')
 async def get_video_filename(request: Request, video_filename: str):
+    session_id = request.cookies.get("session_id")
+    current_frame_generator = queue[session_id]["generator"]
+    current_filename = next(current_frame_generator)
+
+    headers = {
+        "Next-Frame": current_filename,
+    }
     video_filename = f"media/{video_filename}"
-    return FileResponse(video_filename, media_type="video/mp4")
+    response = FileResponse(video_filename, media_type="video/mp4", headers=headers)
+
+    return response
 
 
 @app.get('/start_streaming/{title}/')
 async def video_feed(title: str, response: Response, alpha: typing.Optional[float] = None):
     session_id = str(uuid.uuid4())
-    start_frame_id = session_id + "_start_frame"
     framechunks_generator = video_generator(title, alpha)
     start_framechunk_filename = next(framechunks_generator)
 
-    queue[start_frame_id] = {
+    queue[session_id] = {
         "generator": framechunks_generator,
-        "next_frame_id": None,
     }
 
-    response.set_cookie(key="session_id", value=start_frame_id)
+    response.set_cookie(key="session_id", value=session_id)
     return {'start_filename': start_framechunk_filename}
 
 
