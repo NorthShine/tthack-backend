@@ -1,6 +1,8 @@
 import numpy as np
 import cv2
 
+# get_corrected_chunk(chunk, framerate) готов
+# Возвращает обработанный чанк
 
 border_coef = {
     (320, 240): 0.2,
@@ -79,9 +81,6 @@ def get_epilepthic_risk(chunk, framerate) -> float:
     return avg_risk
 
 
-################## Обновлено #############################
-# Вызываем эту фнкцию, она возвращает уже обработанный чанк
-# Сглаживание здесь не предусмотрено
 def get_corrected_chunk(chunk:list, framerate:int) -> list:
     """Main prefab processing function
 
