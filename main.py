@@ -99,7 +99,7 @@ async def get_video_filename(request: Request, video_filename: str):
         "media-type": "video/mp4"
     }
     video_filename = f"media/{video_filename}"
-    response = FileResponse(video_filename, headers=headers)
+    response = FileResponse(video_filename, headers=headers, media_type="video/mp4")
 
     return response
 
