@@ -4,14 +4,16 @@ import uuid
 
 import cv2
 import uvicorn
-from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, Request, Response
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from vidgear.gears import VideoGear
 
+from epilepthic_scene_detector.br_test import get_epilepthic_risk
+
 app = FastAPI()
 output_params = {"-fourcc": "mp4v", "-fps": 30}
-queue = []
+queue = {}
 
 app = FastAPI()
 app.add_middleware(
@@ -22,14 +24,26 @@ app.add_middleware(
     allow_headers=['*'],
 )
 
+frames_by_title = {}
+
 
 def video_generator(title, alpha):
     stream = VideoGear(source=f"media/{title}").start()
     frame_rate = 60
+    risk = 0
     while True:
         frame = stream.read()
         if frame is None:
             break
+
+        if title in frames_by_title:
+            if len(frames_by_title[title]) == 5:
+                risk = get_epilepthic_risk(frames_by_title[title], 30)
+                frames_by_title[title] = []
+            frames_by_title[title].append(frame)
+        else:
+            frames_by_title[title] = [frame]
+
         frame_shape = frame.shape
         frame_width = frame_shape[1]
         frame_height = frame_shape[0]
@@ -41,7 +55,6 @@ def video_generator(title, alpha):
             30,
             (frame_width, frame_height)
         )
-        queue.append(random_filename)        
         for _ in range(frame_rate * 2):
             writer.write(frame)
             frame = stream.read()
@@ -49,24 +62,60 @@ def video_generator(title, alpha):
         output = str(uuid.uuid4()) + ".mp4"
 
         ffmpeg_str = f"ffmpeg -i media/{random_filename} -c:v libx264 -crf 20 -c:a copy media/{output}"
-        if alpha:
+        if risk > 0.25:
+            ffmpeg_str = f"ffmpeg -i media/{random_filename} -vf eq=contrast=25 -c:v libx264 -crf 20 -c:a copy media/{output}"
+        elif alpha:
             ffmpeg_str = f"ffmpeg -i media/{random_filename} -vf eq=contrast={alpha} -c:v libx264 -crf 20 -c:a copy media/{output}"
 
-        subprocess.run(ffmpeg_str.split())
-        subprocess.run(f"rm media/{random_filename}".split())
+        subprocess.call(ffmpeg_str, shell=True)
+        subprocess.call(f"rm media/{random_filename}", shell=True)
         yield output
 
 
 @app.get('/video_part/{video_filename}/')
 async def get_video_filename(request: Request, video_filename: str):
+    session_id = request.cookies.get("session_id")
+    generator = queue.get(session_id)
+    current_frame_generator = generator["generator"] if generator is not None else None
+    if current_frame_generator is None:
+        return JSONResponse(
+            content={"message": "End of video"},
+            headers={"x-next-frame": "end"}
+        )
+
+    try:
+        current_filename = next(current_frame_generator)
+    except StopIteration:
+        del queue[session_id]
+        headers = {
+            "x-next-frame": "end"
+        }
+        return JSONResponse(
+            content={"message": "End of video"},
+            headers=headers)
+
+    headers = {
+        "X-Next-Frame": current_filename,
+        "media-type": "video/mp4"
+    }
     video_filename = f"media/{video_filename}"
-    return FileResponse(video_filename, media_type="video/mp4")
+    response = FileResponse(video_filename, headers=headers)
+
+    return response
 
 
-@app.get('/start_streaming/{title}')
-async def video_feed(title: str, alpha: typing.Optional[float] = None):
-    current_filename = next(video_generator(title, alpha))
-    return {'start_filename': current_filename}
+@app.get('/start_streaming/{title}/')
+async def video_feed(title: str, response: Response, alpha: typing.Optional[float] = None):
+    session_id = str(uuid.uuid4())
+    framechunks_generator = video_generator(title, alpha)
+    start_framechunk_filename = next(framechunks_generator)
+
+    queue[session_id] = {
+        "generator": framechunks_generator,
+    }
+
+    response.set_cookie(key="session_id", value=session_id)
+    return {'start_filename': start_framechunk_filename}
 
 
 if __name__ == '__main__':
