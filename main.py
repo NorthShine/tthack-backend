@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from vidgear.gears import VideoGear
 
-from epilepthic_scene_detector.br_test import get_epilepthic_risk
+from epilepthic_scene_detector.epilepthic_controller import get_epilepthic_risk
 
 app = FastAPI()
 output_params = {"-fourcc": "mp4v", "-fps": 30}
